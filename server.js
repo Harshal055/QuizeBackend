@@ -2,21 +2,20 @@ const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const bcrypt = require("bcrypt");
-const fetch = require("node-fetch");// Add this
-require('dotenv').config();
+const fetch = require("node-fetch");
+const serverless = require("serverless-http");
+require("dotenv").config();
 
 const app = express();
 
-// Enable CORS for all routes (replace "*" with your frontend URL in production)
 app.use(cors({
-  origin: "http://localhost:5173", // Explicitly allow your frontend
+  origin: "https://quize-frontend-tau.vercel.app",
   methods: ["GET", "POST"],
   credentials: true
 }));
 
 app.use(express.json());
-ser
-// Connect to MongoDB 
+
 const mongoURI = process.env.MONGODB_URI;
 mongoose.connect(mongoURI)
   .then(() => console.log("Connected to MongoDB"))
@@ -25,20 +24,18 @@ mongoose.connect(mongoURI)
     process.exit(1);
   });
 
-// User Schema and Model
 const userSchema = new mongoose.Schema({
-  name: {type:String, unique:true,required: true},
+  name: { type: String, unique: true, required: true },
   email: { type: String, required: true, unique: true, lowercase: true },
   passwordHash: { type: String, required: true }
 });
 const User = mongoose.model("User", userSchema);
 
-// Signup Route
+// Signup
 app.post("/signup", async (req, res) => {
   const { name, email, password } = req.body;
   try {
-    const saltRounds = 10;
-    const passwordHash = await bcrypt.hash(password, saltRounds);
+    const passwordHash = await bcrypt.hash(password, 10);
     const newUser = new User({ name, email: email.toLowerCase(), passwordHash });
     await newUser.save();
     res.json({ success: true, message: "Signup successful!" });
@@ -53,29 +50,29 @@ app.post("/signup", async (req, res) => {
   }
 });
 
-// Login Route
+// Login
 app.post("/login", async (req, res) => {
   const { email, password } = req.body;
   try {
     const user = await User.findOne({ email: email.toLowerCase() });
     if (!user) return res.status(401).json({ success: false, message: "Invalid credentials." });
-    
+
     const isMatch = await bcrypt.compare(password, user.passwordHash);
     if (!isMatch) return res.status(401).json({ success: false, message: "Incorrect password." });
 
     res.json({
-      success: true,  
+      success: true,
       userName: user.name,
       userEmail: user.email,
       redirectUrl: "/LanguagePage"
     });
   } catch (error) {
     console.error("Login error:", error);
-    res.status(500).json({ success: false, message: "Login failed. Please try again later." });
+    res.status(500).json({ success: false, message: "Login failed." });
   }
 });
 
-// Proxy Route to Handle External API Requests
+// Proxy route
 app.get("/api/dashboard/totalusers", async (req, res) => {
   try {
     const response = await fetch("https://sc.ecombullet.com/api/dashboard/totalusers");
@@ -87,8 +84,5 @@ app.get("/api/dashboard/totalusers", async (req, res) => {
   }
 });
 
-// Start Server
-const PORT = process.env.PORT || 8081;
-app.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
-});
+// Export as serverless handler
+module.exports = serverless(app);
